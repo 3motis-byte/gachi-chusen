@@ -1,0 +1,1741 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="ガチ抽選機" />
+<meta name="theme-color" content="#0a0a12" />
+<meta name="description" content="卓分け抽選ツール - ガチ抽選機" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="host.png" type="image/png" />
+<link rel="apple-touch-icon" href="host.png" />
+<title>ガチ抽選機</title>
+<style>
+  /* =========================================================
+     Reset / Base
+     ========================================================= */
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    height: 100%;
+    background: #0a0a12;
+    color: #f2f2f7;
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans",
+                 "Noto Sans JP", "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+    overscroll-behavior: none;
+  }
+  button, input, select {
+    font-family: inherit;
+    color: inherit;
+  }
+  button {
+    background: none; border: none; cursor: pointer;
+    touch-action: manipulation;
+  }
+  input[type="text"], input[type="number"], input[type="password"] {
+    background: #1a1a26;
+    border: 1px solid #2a2a3a;
+    color: #f2f2f7;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 16px;
+    width: 100%;
+    outline: none;
+    transition: border-color .15s ease;
+  }
+  input:focus { border-color: #00e0ff; }
+  select {
+    background: #1a1a26;
+    border: 1px solid #2a2a3a;
+    color: #f2f2f7;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 16px;
+    width: 100%;
+  }
+  label {
+    display: block;
+    font-size: 13px;
+    color: #9a9aad;
+    margin: 0 0 6px 2px;
+  }
+
+  /* =========================================================
+     App layout
+     ========================================================= */
+  #app {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .screen {
+    position: absolute; inset: 0;
+    display: none;
+    flex-direction: column;
+    padding: env(safe-area-inset-top) 20px env(safe-area-inset-bottom);
+  }
+  .screen.active { display: flex; }
+
+  /* =========================================================
+     Host mode entry (small icon, bottom-right)
+     ========================================================= */
+  #hostEntry {
+    position: fixed;
+    bottom: calc(env(safe-area-inset-bottom) + 10px);
+    right: 10px;
+    width: 52px; height: 52px;
+    z-index: 100;
+    opacity: 0.55;
+    pointer-events: auto;
+    -webkit-touch-callout: none;
+  }
+  #hostEntry img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+    -webkit-user-drag: none;
+    user-select: none;
+  }
+  #hostEntry:active { opacity: 0.9; }
+
+  /* =========================================================
+     HOME screen
+     ========================================================= */
+  #home {
+    justify-content: space-between;
+    align-items: center;
+    padding-top: calc(env(safe-area-inset-top) + 32px);
+    padding-bottom: calc(env(safe-area-inset-bottom) + 32px);
+  }
+  #home .title {
+    font-size: 18px;
+    letter-spacing: .15em;
+    color: #8a8aa0;
+    margin-top: 8px;
+    font-weight: 500;
+  }
+  #home .remain {
+    text-align: center;
+    margin-top: 40px;
+  }
+  #home .remain .label {
+    font-size: 13px;
+    color: #8a8a9e;
+    letter-spacing: .15em;
+  }
+  #home .remain .num {
+    font-size: 68px;
+    font-weight: 300;
+    color: #fff;
+    letter-spacing: .02em;
+    line-height: 1;
+    margin-top: 6px;
+  }
+  #home .remain .unit {
+    font-size: 15px;
+    color: #8a8a9e;
+    margin-left: 4px;
+  }
+
+  .startBtn {
+    width: 240px; height: 240px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #1c2336 0%, #0d1020 70%);
+    border: 2px solid #00e0ff;
+    box-shadow:
+      0 0 0 6px rgba(0, 224, 255, 0.08),
+      0 0 40px rgba(0, 224, 255, 0.35),
+      inset 0 0 30px rgba(0, 224, 255, 0.15);
+    color: #fff;
+    font-size: 24px;
+    letter-spacing: .25em;
+    font-weight: 500;
+    transition: transform .1s ease, box-shadow .2s ease;
+    position: relative;
+  }
+  .startBtn:active {
+    transform: scale(0.96);
+    box-shadow:
+      0 0 0 4px rgba(0, 224, 255, 0.15),
+      0 0 20px rgba(0, 224, 255, 0.5),
+      inset 0 0 40px rgba(0, 224, 255, 0.25);
+  }
+  .startBtn[disabled] {
+    opacity: 0.4;
+    border-color: #445;
+    box-shadow: none;
+  }
+  .startBtn .sub {
+    display: block;
+    font-size: 11px;
+    color: #8a8a9e;
+    letter-spacing: .3em;
+    margin-top: 8px;
+  }
+
+  #home .hint {
+    font-size: 11px;
+    color: #44445a;
+    letter-spacing: .15em;
+    margin-bottom: 4px;
+  }
+
+  /* =========================================================
+     SLOT screen
+     ========================================================= */
+  #slot {
+    justify-content: center;
+    align-items: center;
+  }
+  .reels {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+    justify-content: center;
+    padding: 30px 10px;
+  }
+  .reel {
+    width: 110px; height: 160px;
+    background: linear-gradient(180deg, #13131f 0%, #1a1a28 50%, #13131f 100%);
+    border: 2px solid #2a2a3c;
+    border-radius: 14px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.7);
+  }
+  .reel::before, .reel::after {
+    content: "";
+    position: absolute; left: 0; right: 0;
+    height: 48px;
+    z-index: 3;
+    pointer-events: none;
+  }
+  .reel::before {
+    top: 0;
+    background: linear-gradient(180deg, #13131f 0%, rgba(19,19,31,0) 100%);
+  }
+  .reel::after {
+    bottom: 0;
+    background: linear-gradient(0deg, #13131f 0%, rgba(19,19,31,0) 100%);
+  }
+  .reel .line {
+    position: absolute;
+    left: 6px; right: 6px;
+    top: 50%;
+    height: 56px;
+    transform: translateY(-50%);
+    border-top: 1px solid rgba(0, 224, 255, 0.3);
+    border-bottom: 1px solid rgba(0, 224, 255, 0.3);
+    z-index: 2;
+    pointer-events: none;
+  }
+  .reel .strip {
+    position: absolute;
+    left: 0; right: 0; top: 52px;
+    display: flex;
+    flex-direction: column;
+    will-change: transform;
+  }
+  .reel .cell {
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 42px;
+    font-weight: 500;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+  }
+  .reel.table .cell { color: #00e0ff; }
+  .reel.num .cell   { color: #fff; }
+  .slotLabel {
+    font-size: 12px;
+    color: #6a6a80;
+    letter-spacing: .25em;
+    text-align: center;
+    margin-top: 20px;
+  }
+
+  /* =========================================================
+     RESULT screen
+     ========================================================= */
+  #result {
+    justify-content: center;
+    align-items: center;
+  }
+  #result .card {
+    background: linear-gradient(180deg, #13131f 0%, #1a1a2e 100%);
+    border: 2px solid #00e0ff;
+    border-radius: 20px;
+    padding: 44px 38px;
+    box-shadow:
+      0 0 0 6px rgba(0, 224, 255, 0.08),
+      0 0 60px rgba(0, 224, 255, 0.25);
+    text-align: center;
+    animation: cardIn .5s ease-out;
+  }
+  @keyframes cardIn {
+    from { transform: scale(0.85); opacity: 0; }
+    to   { transform: scale(1);    opacity: 1; }
+  }
+  #result .label {
+    font-size: 12px;
+    color: #8a8a9e;
+    letter-spacing: .3em;
+    margin-bottom: 14px;
+  }
+  #result .big {
+    font-size: 22px;
+    color: #f2f2f7;
+    margin-bottom: 8px;
+    letter-spacing: .1em;
+  }
+  #result .seat {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  #result .table {
+    font-size: 92px;
+    font-weight: 300;
+    color: #00e0ff;
+    line-height: 1;
+  }
+  #result .tableSuf {
+    font-size: 22px;
+    color: #8a8a9e;
+  }
+  #result .num {
+    font-size: 92px;
+    font-weight: 300;
+    color: #fff;
+    line-height: 1;
+    margin-left: 10px;
+  }
+  #result .numSuf {
+    font-size: 22px;
+    color: #8a8a9e;
+  }
+  #result .nextBtn {
+    margin-top: 44px;
+    padding: 16px 48px;
+    background: #00e0ff;
+    color: #0a0a12;
+    border-radius: 999px;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: .15em;
+  }
+  #result .nextBtn:active { transform: scale(0.97); }
+
+  /* =========================================================
+     COMPLETE screen
+     ========================================================= */
+  #complete {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+  }
+  #complete .big {
+    font-size: 28px;
+    color: #fff;
+    letter-spacing: .1em;
+    margin-bottom: 12px;
+  }
+  #complete .sub {
+    font-size: 14px;
+    color: #8a8a9e;
+    margin-bottom: 40px;
+  }
+
+  /* =========================================================
+     SETUP / PASSCODE
+     ========================================================= */
+  .modalScreen {
+    background: #0a0a12;
+    justify-content: flex-start;
+    padding-top: calc(env(safe-area-inset-top) + 60px);
+  }
+  .modalScreen h2 {
+    font-size: 20px;
+    font-weight: 500;
+    margin: 0 0 8px;
+    color: #fff;
+    letter-spacing: .08em;
+  }
+  .modalScreen .desc {
+    font-size: 13px;
+    color: #8a8a9e;
+    margin-bottom: 28px;
+  }
+  .formRow { margin-bottom: 18px; }
+  .primaryBtn {
+    width: 100%;
+    padding: 16px;
+    background: #00e0ff;
+    color: #0a0a12;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: .1em;
+    margin-top: 8px;
+  }
+  .primaryBtn[disabled] { opacity: .4; }
+  .ghostBtn {
+    width: 100%;
+    padding: 14px;
+    background: transparent;
+    color: #8a8a9e;
+    border: 1px solid #2a2a3a;
+    border-radius: 12px;
+    font-size: 14px;
+    margin-top: 10px;
+  }
+  .dangerBtn {
+    width: 100%;
+    padding: 14px;
+    background: transparent;
+    color: #ff5577;
+    border: 1px solid #552233;
+    border-radius: 12px;
+    font-size: 14px;
+    margin-top: 10px;
+  }
+  .errorText {
+    color: #ff5577;
+    font-size: 13px;
+    margin-top: 10px;
+    min-height: 18px;
+  }
+
+  /* =========================================================
+     HOST mode
+     ========================================================= */
+  #host {
+    background: #0c1420;
+    padding: 0;
+  }
+  #host .hostHeader {
+    padding: calc(env(safe-area-inset-top) + 14px) 18px 12px;
+    background: #0c1420;
+    border-bottom: 1px solid #1a2a40;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  #host .hostHeader .ttl {
+    font-size: 14px;
+    letter-spacing: .2em;
+    color: #ffb84d;
+  }
+  #host .closeBtn {
+    padding: 8px 14px;
+    color: #8a9eb4;
+    font-size: 13px;
+    border: 1px solid #1a2a40;
+    border-radius: 8px;
+  }
+  #host .tabs {
+    display: flex;
+    background: #0c1420;
+    border-bottom: 1px solid #1a2a40;
+  }
+  #host .tab {
+    flex: 1;
+    padding: 14px 4px;
+    text-align: center;
+    font-size: 12px;
+    color: #6a7e94;
+    letter-spacing: .1em;
+    border-bottom: 2px solid transparent;
+  }
+  #host .tab.active {
+    color: #ffb84d;
+    border-bottom-color: #ffb84d;
+  }
+  #host .tabBody {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 18px calc(env(safe-area-inset-bottom) + 40px);
+    -webkit-overflow-scrolling: touch;
+  }
+  #host h3 {
+    font-size: 13px;
+    color: #ffb84d;
+    margin: 24px 0 10px;
+    letter-spacing: .1em;
+    font-weight: 500;
+  }
+  #host h3:first-child { margin-top: 0; }
+
+  .tableInfo {
+    background: #0f1a2a;
+    border: 1px solid #1a2a40;
+    border-radius: 10px;
+    padding: 14px;
+    margin-top: 10px;
+    font-size: 14px;
+    color: #c0d0e0;
+  }
+  .tableInfo .row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+  }
+  .tableInfo .row .k { color: #6a7e94; }
+
+  .rigList {
+    margin-top: 12px;
+  }
+  .rigItem {
+    background: #0f1a2a;
+    border: 1px solid #1a2a40;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .rigItem.drawn { opacity: 0.5; }
+  .rigItem.next {
+    border-color: #ffb84d;
+    box-shadow: 0 0 0 2px rgba(255,184,77,0.15);
+  }
+  .rigItem .info {
+    flex: 1;
+    min-width: 0;
+  }
+  .rigItem .name {
+    font-size: 15px;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .rigItem .seat {
+    font-size: 12px;
+    color: #8a9eb4;
+    margin-top: 3px;
+  }
+  .rigItem .seat .tag {
+    display: inline-block;
+    background: #1a2a40;
+    color: #ffb84d;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    font-size: 10px;
+  }
+  .rigItem .actions {
+    display: flex; gap: 6px;
+  }
+  .iconBtn {
+    padding: 8px 12px;
+    font-size: 12px;
+    border-radius: 8px;
+    background: #1a2a40;
+    color: #c0d0e0;
+  }
+  .iconBtn.primary { background: #ffb84d; color: #0c1420; font-weight: 600; }
+  .iconBtn.danger  { background: #2a1a24; color: #ff5577; }
+
+  .hostEmpty {
+    color: #4a5a70;
+    font-size: 13px;
+    text-align: center;
+    padding: 30px 10px;
+  }
+
+  .rigForm {
+    background: #0f1a2a;
+    border: 1px solid #1a2a40;
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .rigForm .row2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .rigForm input, .rigForm select {
+    background: #0a1020;
+    border-color: #1a2a40;
+  }
+
+  .historyItem {
+    background: #0f1a2a;
+    border: 1px solid #1a2a40;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+  }
+  .historyItem .order {
+    color: #6a7e94;
+    font-size: 11px;
+    margin-right: 10px;
+    min-width: 24px;
+  }
+  .historyItem .seat { color: #fff; flex: 1; }
+  .historyItem .mark {
+    font-size: 10px;
+    color: #ffb84d;
+    background: rgba(255,184,77,0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  .statusBanner {
+    background: rgba(255,184,77,0.08);
+    border: 1px solid #3a2810;
+    color: #ffb84d;
+    font-size: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin-bottom: 14px;
+  }
+  .statusBanner.warn {
+    background: rgba(255,85,119,0.08);
+    border-color: #552233;
+    color: #ff5577;
+  }
+
+  /* =========================================================
+     Util
+     ========================================================= */
+  .hidden { display: none !important; }
+  .center { text-align: center; }
+  .grow { flex: 1; }
+
+  /* No-select for headings */
+  h1, h2, h3, .num, .table, .big { -webkit-user-select: none; user-select: none; }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- Host mode entry (small icon, bottom-right) -->
+  <div id="hostEntry" aria-hidden="true">
+    <img src="host.png" alt="" draggable="false" />
+  </div>
+
+  <!-- ============================================================
+       HOME SCREEN
+       ============================================================ -->
+  <section id="home" class="screen">
+    <div class="title">ガチ抽選機</div>
+
+    <div class="remain">
+      <div class="label">REMAINING</div>
+      <div>
+        <span class="num" id="remainNum">0</span>
+        <span class="unit">人</span>
+      </div>
+    </div>
+
+    <button id="startBtn" class="startBtn" type="button">
+      START
+      <span class="sub">TAP</span>
+    </button>
+
+    <div class="hint">&nbsp;</div>
+  </section>
+
+  <!-- ============================================================
+       SLOT SCREEN
+       ============================================================ -->
+  <section id="slot" class="screen">
+    <div class="reels">
+      <div class="reel table">
+        <div class="line"></div>
+        <div class="strip" id="reelTableStrip"></div>
+      </div>
+      <div class="reel num">
+        <div class="line"></div>
+        <div class="strip" id="reelNumStrip"></div>
+      </div>
+    </div>
+    <div class="slotLabel">DRAWING...</div>
+  </section>
+
+  <!-- ============================================================
+       RESULT SCREEN
+       ============================================================ -->
+  <section id="result" class="screen">
+    <div class="card">
+      <div class="label">YOUR SEAT</div>
+      <div class="seat">
+        <span class="table" id="resTable">A</span>
+        <span class="tableSuf">卓</span>
+        <span class="num" id="resNum">1</span>
+        <span class="numSuf">番</span>
+      </div>
+    </div>
+    <button id="nextBtn" class="nextBtn" type="button">次の人へ</button>
+  </section>
+
+  <!-- ============================================================
+       COMPLETE SCREEN
+       ============================================================ -->
+  <section id="complete" class="screen">
+    <div class="big">抽選終了</div>
+    <div class="sub">全員の席が決まりました</div>
+  </section>
+
+  <!-- ============================================================
+       SETUP SCREEN (first time)
+       ============================================================ -->
+  <section id="setup" class="screen modalScreen">
+    <h2>初期設定</h2>
+    <div class="desc">参加人数と主催者パスコードを設定してください</div>
+
+    <div class="formRow">
+      <label>参加人数（30〜45）</label>
+      <input type="number" id="setupPeople" min="4" max="120" value="36" inputmode="numeric" />
+    </div>
+    <div class="formRow">
+      <label>主催者パスコード（4桁以上）</label>
+      <input type="password" id="setupPass" inputmode="numeric" />
+    </div>
+    <div class="formRow">
+      <label>確認のため再入力</label>
+      <input type="password" id="setupPass2" inputmode="numeric" />
+    </div>
+    <div class="errorText" id="setupErr"></div>
+    <button id="setupSaveBtn" class="primaryBtn" type="button">開始する</button>
+  </section>
+
+  <!-- ============================================================
+       PASSCODE SCREEN
+       ============================================================ -->
+  <section id="passcode" class="screen modalScreen">
+    <h2>パスコード</h2>
+    <div class="desc">主催者モードに入るにはパスコードを入力してください</div>
+    <div class="formRow">
+      <input type="password" id="passInput" inputmode="numeric" autocomplete="off" />
+    </div>
+    <div class="errorText" id="passErr"></div>
+    <button id="passOkBtn" class="primaryBtn" type="button">認証</button>
+    <button id="passCancelBtn" class="ghostBtn" type="button">戻る</button>
+  </section>
+
+  <!-- ============================================================
+       HOST MODE
+       ============================================================ -->
+  <section id="host" class="screen">
+    <div class="hostHeader">
+      <div class="ttl">主催者モード</div>
+      <button id="hostCloseBtn" class="closeBtn" type="button">閉じる</button>
+    </div>
+    <div class="tabs">
+      <button class="tab active" data-tab="settings" type="button">設定</button>
+      <button class="tab" data-tab="rigs" type="button">仕込み</button>
+      <button class="tab" data-tab="next" type="button">次の抽選</button>
+      <button class="tab" data-tab="history" type="button">履歴</button>
+    </div>
+
+    <div class="tabBody">
+
+      <!-- Tab: settings -->
+      <div class="tabPane" data-pane="settings">
+        <h3>卓構成</h3>
+        <div class="tableInfo" id="tableInfoBox"></div>
+
+        <h3>人数変更</h3>
+        <div class="formRow">
+          <label>参加人数</label>
+          <input type="number" id="cfgPeople" min="4" max="120" inputmode="numeric" />
+        </div>
+        <button id="cfgApplyPeopleBtn" class="primaryBtn" type="button">人数を変更</button>
+        <div class="errorText" id="cfgPeopleErr"></div>
+
+        <h3>パスコード変更</h3>
+        <div class="formRow">
+          <label>新しいパスコード</label>
+          <input type="password" id="cfgPass" inputmode="numeric" />
+        </div>
+        <button id="cfgSavePassBtn" class="primaryBtn" type="button">パスコードを保存</button>
+        <div class="errorText" id="cfgPassErr"></div>
+
+        <h3>危険な操作</h3>
+        <button id="resetDrawsBtn" class="ghostBtn" type="button">抽選結果だけリセット</button>
+        <button id="forceEndBtn" class="ghostBtn" type="button">残りをスキップして終了</button>
+        <button id="resetAllBtn" class="dangerBtn" type="button">すべて初期化</button>
+      </div>
+
+      <!-- Tab: rigs -->
+      <div class="tabPane hidden" data-pane="rigs">
+        <h3>仕込み追加</h3>
+        <div class="rigForm">
+          <div class="formRow">
+            <label>名前（主催者用メモ・参加者には見えません）</label>
+            <input type="text" id="rigName" maxlength="20" />
+          </div>
+          <div class="row2">
+            <div>
+              <label>卓</label>
+              <select id="rigTable">
+                <option value="A">A卓</option>
+                <option value="B">B卓</option>
+                <option value="C">C卓</option>
+                <option value="D">D卓</option>
+              </select>
+            </div>
+            <div>
+              <label>番号</label>
+              <select id="rigNum"></select>
+            </div>
+          </div>
+          <button id="rigAddBtn" class="primaryBtn" type="button" style="margin-top:14px;">追加</button>
+          <div class="errorText" id="rigErr"></div>
+        </div>
+
+        <h3>仕込み一覧</h3>
+        <div class="rigList" id="rigList"></div>
+      </div>
+
+      <!-- Tab: next -->
+      <div class="tabPane hidden" data-pane="next">
+        <h3>次の抽選で使う仕込み</h3>
+        <div id="nextStatus" class="statusBanner">通常抽選モード</div>
+        <div id="nextRigList"></div>
+        <button id="clearNextBtn" class="ghostBtn" type="button">通常抽選に戻す</button>
+      </div>
+
+      <!-- Tab: history -->
+      <div class="tabPane hidden" data-pane="history">
+        <h3>抽選履歴</h3>
+        <div id="historyList"></div>
+      </div>
+
+    </div>
+  </section>
+
+</div>
+
+<script>
+/* =============================================================
+   卓分け抽選ツール
+   - 単一HTMLで完結
+   - localStorageに状態保存
+   - crypto.getRandomValues() で公平抽選
+   ============================================================= */
+
+(function () {
+  'use strict';
+
+  // ==========================================================
+  // Constants
+  // ==========================================================
+  const STORAGE_KEY = 'takuwake-v2';
+  const TABLE_KEYS = ['A', 'B', 'C', 'D'];
+  const SLOT_TABLE_MS = 900;   // 卓リールの回転時間
+  const SLOT_NUM_MS   = 1000;  // 番号リールの回転時間
+  const SLOT_GAP_MS   = 150;   // 番号が止まった後の余韻
+  const CELL_H        = 56;    // .cell の高さ (CSSと一致)
+
+  // ==========================================================
+  // State
+  // ==========================================================
+  /** @type {{
+   *   config: {
+   *     initialized: boolean,
+   *     totalPeople: number,
+   *     passcode: string,
+   *     tables: {A:number,B:number,C:number,D:number},
+   *     started: boolean,
+   *     ended: boolean
+   *   },
+   *   tableAvail: {A:number,B:number,C:number,D:number},
+   *   numbers: Array<{value:number,status:string,reservedFor:string|null}>,
+   *   rigs: Array<{id:string,name:string,table:string,number:number,used:boolean}>,
+   *   nextRigId: string|null,
+   *   history: Array<{order:number,table:string,number:number,wasRigged:boolean,name:string|null,timestamp:number}>
+   * }} */
+  let state = null;
+
+  // ==========================================================
+  // Utility
+  // ==========================================================
+  const $  = (sel) => document.querySelector(sel);
+  const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+  function secureRandomInt(max) {
+    // [0, max)
+    if (max <= 0) return 0;
+    const buf = new Uint32Array(1);
+    const limit = Math.floor(0xFFFFFFFF / max) * max;
+    let r;
+    do {
+      crypto.getRandomValues(buf);
+      r = buf[0];
+    } while (r >= limit);
+    return r % max;
+  }
+
+  function uuid() {
+    return 'id-' + Date.now().toString(36) + '-' +
+           Math.floor(Math.random() * 1e9).toString(36);
+  }
+
+  function calcTables(n) {
+    const base = Math.floor(n / 4);
+    const rem  = n % 4;
+    return {
+      A: base + (rem >= 1 ? 1 : 0),
+      B: base + (rem >= 2 ? 1 : 0),
+      C: base + (rem >= 3 ? 1 : 0),
+      D: base,
+    };
+  }
+
+  function buildNumbers(n) {
+    const arr = [];
+    for (let i = 1; i <= n; i++) {
+      arr.push({ value: i, status: 'available', reservedFor: null });
+    }
+    return arr;
+  }
+
+  function findNumber(v) {
+    return state.numbers.find((n) => n.value === v);
+  }
+
+  function findRig(id) {
+    return state.rigs.find((r) => r.id === id);
+  }
+
+  function availableNumbers() {
+    return state.numbers.filter((n) => n.status === 'available');
+  }
+
+  function availableTableKeys() {
+    return TABLE_KEYS.filter((t) => state.tableAvail[t] > 0);
+  }
+
+  function canDrawNormal() {
+    return availableTableKeys().length > 0 && availableNumbers().length > 0;
+  }
+
+  function remainingCount() {
+    return state.config.totalPeople - state.history.length;
+  }
+
+  function pickRandomTable() {
+    const keys = availableTableKeys();
+    if (keys.length === 0) return null;
+    const total = keys.reduce((s, k) => s + state.tableAvail[k], 0);
+    if (total <= 0) return null;
+    let r = secureRandomInt(total);
+    for (const k of keys) {
+      if (r < state.tableAvail[k]) return k;
+      r -= state.tableAvail[k];
+    }
+    return keys[keys.length - 1];
+  }
+
+  // ==========================================================
+  // Persistence
+  // ==========================================================
+  function save() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {
+      console.error('save failed', e);
+    }
+  }
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return null;
+      return parsed;
+    } catch (e) {
+      console.error('load failed', e);
+      return null;
+    }
+  }
+
+  function initEmptyState() {
+    return {
+      config: {
+        initialized: false,
+        totalPeople: 36,
+        passcode: '',
+        tables: calcTables(36),
+        started: false,
+        ended: false,
+      },
+      tableAvail: calcTables(36),
+      numbers: [],
+      rigs: [],
+      nextRigId: null,
+      history: [],
+    };
+  }
+
+  // ==========================================================
+  // Screens
+  // ==========================================================
+  function show(screenId) {
+    $$('.screen').forEach((el) => el.classList.remove('active'));
+    $('#' + screenId).classList.add('active');
+  }
+
+  // ==========================================================
+  // HOME
+  // ==========================================================
+  function renderHome() {
+    const remain = remainingCount();
+    $('#remainNum').textContent = remain;
+
+    const btn = $('#startBtn');
+    if (state.config.ended || remain === 0) {
+      show('complete');
+      return;
+    }
+    // 通常抽選ができず、仕込みも未指定なら無効化
+    if (!canDrawNormal() && !state.nextRigId) {
+      btn.disabled = true;
+      btn.querySelector('.sub').textContent = 'WAIT';
+    } else {
+      btn.disabled = false;
+      btn.querySelector('.sub').textContent = 'TAP';
+    }
+  }
+
+  // ==========================================================
+  // DRAW LOGIC
+  // ==========================================================
+  let drawing = false;
+
+  function pickDrawTargets() {
+    // Rig first
+    if (state.nextRigId) {
+      const rig = findRig(state.nextRigId);
+      if (rig && !rig.used) {
+        const numObj = findNumber(rig.number);
+        if (numObj && numObj.status === 'reserved' && numObj.reservedFor === rig.id) {
+          return { table: rig.table, number: rig.number, rig };
+        }
+      }
+      // rigが壊れていた場合はクリア
+      state.nextRigId = null;
+    }
+    if (!canDrawNormal()) return null;
+    const table = pickRandomTable();
+    const pool = availableNumbers();
+    const idx = secureRandomInt(pool.length);
+    const number = pool[idx].value;
+    return { table, number, rig: null };
+  }
+
+  async function startDraw() {
+    if (drawing) return;
+    const pick = pickDrawTargets();
+    if (!pick) {
+      renderHome();
+      return;
+    }
+    drawing = true;
+
+    show('slot');
+    await runSlot(pick.table, pick.number);
+
+    // Commit result
+    commitDraw(pick.table, pick.number, pick.rig);
+
+    // Show result
+    $('#resTable').textContent = pick.table;
+    $('#resNum').textContent   = pick.number;
+    show('result');
+
+    drawing = false;
+  }
+
+  function commitDraw(table, number, rig) {
+    const numObj = findNumber(number);
+    if (numObj) {
+      numObj.status = 'drawn';
+      numObj.reservedFor = null;
+    }
+    if (rig) {
+      // Rigged: table was already decremented on rig add, just mark rig used
+      rig.used = true;
+      state.nextRigId = null;
+    } else {
+      // Normal: decrement table counter
+      state.tableAvail[table]--;
+    }
+    state.history.push({
+      order: state.history.length + 1,
+      table: table,
+      number: number,
+      wasRigged: !!rig,
+      name: rig ? rig.name : null,
+      timestamp: Date.now(),
+    });
+    state.config.started = true;
+    save();
+  }
+
+  // ==========================================================
+  // SLOT ANIMATION
+  // ==========================================================
+  function buildReel(stripEl, items, targetIdx, repeat) {
+    // items: 表示する候補配列
+    // targetIdx: 最終的に中心に来る index
+    // repeat: 繰り返し回数（回転量を稼ぐため）
+    stripEl.innerHTML = '';
+    stripEl.style.transition = 'none';
+    stripEl.style.transform  = 'translateY(0px)';
+
+    const total = items.length * repeat + 1;
+    for (let i = 0; i < total; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.textContent = items[i % items.length];
+      stripEl.appendChild(cell);
+    }
+
+    // 最終停止位置 = items.length*(repeat-1) + targetIdx の cell が中央へ
+    const finalIdx = items.length * (repeat - 1) + targetIdx;
+    return -finalIdx * CELL_H;
+  }
+
+  function runSlot(table, number) {
+    return new Promise((resolve) => {
+      const tableStrip = $('#reelTableStrip');
+      const numStrip   = $('#reelNumStrip');
+
+      // Table reel
+      const tableIdx = TABLE_KEYS.indexOf(table);
+      const tableFinal = buildReel(tableStrip, TABLE_KEYS, tableIdx, 8);
+
+      // Number reel: 1 〜 totalPeople（通し番号）
+      const N = state.config.totalPeople;
+      const numItems = [];
+      for (let i = 1; i <= N; i++) numItems.push(i);
+      const numIdx = numItems.indexOf(number);
+      // 候補が少ない時は繰り返し回数を増やして回転量を稼ぐ
+      const numRepeat = Math.max(3, Math.ceil(30 / numItems.length) + 2);
+      const numFinal = buildReel(numStrip, numItems, numIdx, numRepeat);
+
+      // Force reflow so the initial position applies
+      void tableStrip.offsetHeight;
+      void numStrip.offsetHeight;
+
+      // Start both with different timings
+      tableStrip.style.transition = `transform ${SLOT_TABLE_MS}ms cubic-bezier(0.15, 0.6, 0.25, 1)`;
+      tableStrip.style.transform  = `translateY(${tableFinal}px)`;
+
+      // Number reel starts slightly later and ends later
+      setTimeout(() => {
+        numStrip.style.transition = `transform ${SLOT_NUM_MS}ms cubic-bezier(0.15, 0.6, 0.25, 1)`;
+        numStrip.style.transform  = `translateY(${numFinal}px)`;
+      }, 250);
+
+      // Resolve after number reel stops + gap
+      setTimeout(resolve, 250 + SLOT_NUM_MS + SLOT_GAP_MS);
+    });
+  }
+
+  // ==========================================================
+  // HOST MODE - common
+  // ==========================================================
+  function openHost() {
+    renderHostAll();
+    // 最初は設定タブ
+    activateTab('settings');
+    show('host');
+  }
+
+  function closeHost() {
+    renderHome();
+    show('home');
+  }
+
+  function activateTab(name) {
+    $$('#host .tab').forEach((t) => {
+      t.classList.toggle('active', t.dataset.tab === name);
+    });
+    $$('#host .tabPane').forEach((p) => {
+      p.classList.toggle('hidden', p.dataset.pane !== name);
+    });
+  }
+
+  function renderHostAll() {
+    renderSettingsPane();
+    renderRigsPane();
+    renderNextPane();
+    renderHistoryPane();
+  }
+
+  // ---------- SETTINGS pane ----------
+  function renderSettingsPane() {
+    const t = state.config.tables;
+    const drawn = state.history.length;
+    const unusedRigs = state.rigs.filter((r) => !r.used).length;
+    const availNums = availableNumbers().length;
+
+    const html = `
+      <div class="row"><span class="k">参加人数</span><span>${state.config.totalPeople} 人</span></div>
+      <div class="row"><span class="k">A卓</span><span>${t.A} 人</span></div>
+      <div class="row"><span class="k">B卓</span><span>${t.B} 人</span></div>
+      <div class="row"><span class="k">C卓</span><span>${t.C} 人</span></div>
+      <div class="row"><span class="k">D卓</span><span>${t.D} 人</span></div>
+      <div class="row"><span class="k">番号</span><span>1 〜 ${state.config.totalPeople}</span></div>
+      <div class="row"><span class="k">抽選済み</span><span>${drawn} 人</span></div>
+      <div class="row"><span class="k">残り番号</span><span>${availNums} 個</span></div>
+      <div class="row"><span class="k">仕込み予約</span><span>${unusedRigs} 件</span></div>
+    `;
+    $('#tableInfoBox').innerHTML = html;
+
+    $('#cfgPeople').value = state.config.totalPeople;
+    $('#cfgPeopleErr').textContent = state.config.started
+      ? '※ 抽選開始後は人数変更できません（全リセットが必要）'
+      : '';
+    $('#cfgPeople').disabled = state.config.started;
+    $('#cfgApplyPeopleBtn').disabled = state.config.started;
+
+    $('#cfgPass').value = '';
+    $('#cfgPassErr').textContent = '';
+  }
+
+  function applyPeopleChange() {
+    const err = $('#cfgPeopleErr');
+    if (state.config.started) {
+      err.textContent = '抽選開始後は変更できません';
+      return;
+    }
+    const n = parseInt($('#cfgPeople').value, 10);
+    if (!Number.isFinite(n) || n < 4 || n > 120) {
+      err.textContent = '4〜120の範囲で入力してください';
+      return;
+    }
+    const newTables = calcTables(n);
+    // 既存の仕込みが範囲外にならないかチェック
+    // ・番号が n を超えていないか
+    // ・各卓の仕込み数が新しい卓定員を超えていないか
+    const rigPerTable = { A: 0, B: 0, C: 0, D: 0 };
+    for (const r of state.rigs) {
+      if (r.number > n) {
+        err.textContent = `番号 ${r.number} の仕込みが範囲外になります。先にその仕込みを削除してください`;
+        return;
+      }
+      rigPerTable[r.table]++;
+    }
+    for (const t of TABLE_KEYS) {
+      if (rigPerTable[t] > newTables[t]) {
+        err.textContent = `${t}卓の仕込み数(${rigPerTable[t]})が新しい定員(${newTables[t]})を超えます`;
+        return;
+      }
+    }
+    // 適用
+    state.config.totalPeople = n;
+    state.config.tables = newTables;
+    // 番号プールを作り直し（仕込みは維持）
+    state.numbers = buildNumbers(n);
+    for (const r of state.rigs) {
+      const num = findNumber(r.number);
+      if (num) {
+        num.status = 'reserved';
+        num.reservedFor = r.id;
+      }
+    }
+    // 卓カウンタを再計算
+    state.tableAvail = {};
+    for (const t of TABLE_KEYS) {
+      state.tableAvail[t] = newTables[t] - rigPerTable[t];
+    }
+    save();
+    err.textContent = '';
+    renderHostAll();
+  }
+
+  function savePasscode() {
+    const err = $('#cfgPassErr');
+    const v = $('#cfgPass').value.trim();
+    if (v.length < 4) {
+      err.textContent = '4文字以上で入力してください';
+      return;
+    }
+    state.config.passcode = v;
+    save();
+    $('#cfgPass').value = '';
+    err.textContent = '保存しました';
+    setTimeout(() => { err.textContent = ''; }, 1500);
+  }
+
+  function resetDraws() {
+    if (!confirm('抽選結果のみリセットします。設定と仕込みは残ります。よろしいですか？')) return;
+    // 番号プールを作り直し
+    state.numbers = buildNumbers(state.config.totalPeople);
+    // 仕込みを再適用
+    const rigPerTable = { A: 0, B: 0, C: 0, D: 0 };
+    state.rigs.forEach((r) => {
+      r.used = false;
+      rigPerTable[r.table]++;
+      const num = findNumber(r.number);
+      if (num) {
+        num.status = 'reserved';
+        num.reservedFor = r.id;
+      }
+    });
+    // 卓カウンタ再計算
+    state.tableAvail = {};
+    for (const t of TABLE_KEYS) {
+      state.tableAvail[t] = state.config.tables[t] - rigPerTable[t];
+    }
+    state.history = [];
+    state.nextRigId = null;
+    state.config.started = false;
+    state.config.ended = false;
+    save();
+    renderHostAll();
+  }
+
+  function forceEnd() {
+    if (!confirm('残りをスキップして抽選を終了します。よろしいですか？')) return;
+    state.config.ended = true;
+    state.nextRigId = null;
+    save();
+    renderHostAll();
+    alert('抽選を終了しました');
+  }
+
+  function resetAll() {
+    if (!confirm('すべての設定・仕込み・履歴を初期化します。本当によろしいですか？')) return;
+    localStorage.removeItem(STORAGE_KEY);
+    state = initEmptyState();
+    show('setup');
+  }
+
+  // ---------- RIGS pane ----------
+  function renderRigsPane() {
+    updateRigNumOptions();
+    const list = $('#rigList');
+    if (state.rigs.length === 0) {
+      list.innerHTML = '<div class="hostEmpty">仕込みはまだありません</div>';
+      return;
+    }
+    list.innerHTML = state.rigs.map((r) => {
+      const isNext = state.nextRigId === r.id;
+      const usedClass = r.used ? 'drawn' : '';
+      const nextClass = isNext ? 'next' : '';
+      const tag = r.used
+        ? '<span class="tag">消化済</span>'
+        : (isNext ? '<span class="tag">次に発動</span>' : '');
+      return `
+        <div class="rigItem ${usedClass} ${nextClass}">
+          <div class="info">
+            <div class="name">${escapeHtml(r.name)}</div>
+            <div class="seat">${r.table}卓 / ${r.number}番 ${tag}</div>
+          </div>
+          <div class="actions">
+            <button class="iconBtn danger" data-del-rig="${r.id}" type="button" ${r.used ? 'disabled' : ''}>削除</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // bind delete
+    list.querySelectorAll('[data-del-rig]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        deleteRig(btn.dataset.delRig);
+      });
+    });
+  }
+
+  function updateRigNumOptions() {
+    const sel = $('#rigNum');
+    if (!sel) return;
+    const prev = parseInt(sel.value, 10);
+    sel.innerHTML = '';
+    const N = state.config.totalPeople;
+    for (let i = 1; i <= N; i++) {
+      const opt = document.createElement('option');
+      opt.value = i;
+      const num = findNumber(i);
+      if (num && num.status !== 'available') {
+        opt.textContent = i + '番（使用中）';
+        opt.disabled = true;
+      } else {
+        opt.textContent = i + '番';
+      }
+      sel.appendChild(opt);
+    }
+    // 可能なら以前の選択を維持
+    if (Number.isFinite(prev) && prev >= 1 && prev <= N) {
+      sel.value = String(prev);
+    }
+  }
+
+  function addRig() {
+    const err = $('#rigErr');
+    const name = $('#rigName').value.trim();
+    const table = $('#rigTable').value;
+    const num = parseInt($('#rigNum').value, 10);
+
+    if (!name) {
+      err.textContent = '名前を入力してください';
+      return;
+    }
+    if (!TABLE_KEYS.includes(table)) {
+      err.textContent = '卓を選んでください';
+      return;
+    }
+    if (state.tableAvail[table] <= 0) {
+      err.textContent = `${table}卓は満員です（他の卓にするか、先に抽選結果をリセット）`;
+      return;
+    }
+    const numObj = findNumber(num);
+    if (!numObj) {
+      err.textContent = 'その番号は存在しません';
+      return;
+    }
+    if (numObj.status === 'drawn') {
+      err.textContent = 'その番号は既に抽選済みです';
+      return;
+    }
+    if (numObj.status === 'reserved') {
+      err.textContent = 'その番号は既に他の仕込みで使われています';
+      return;
+    }
+    const rig = {
+      id: uuid(),
+      name: name,
+      table: table,
+      number: num,
+      used: false,
+    };
+    state.rigs.push(rig);
+    state.tableAvail[table]--;
+    numObj.status = 'reserved';
+    numObj.reservedFor = rig.id;
+    save();
+
+    $('#rigName').value = '';
+    err.textContent = '';
+    renderHostAll();
+  }
+
+  function deleteRig(id) {
+    const rig = findRig(id);
+    if (!rig) return;
+    if (rig.used) return;
+    if (!confirm(`「${rig.name}」の仕込みを削除します。よろしいですか？`)) return;
+    state.tableAvail[rig.table]++;
+    const numObj = findNumber(rig.number);
+    if (numObj && numObj.status === 'reserved') {
+      numObj.status = 'available';
+      numObj.reservedFor = null;
+    }
+    state.rigs = state.rigs.filter((r) => r.id !== id);
+    if (state.nextRigId === id) state.nextRigId = null;
+    save();
+    renderHostAll();
+  }
+
+  // ---------- NEXT pane ----------
+  function renderNextPane() {
+    const banner = $('#nextStatus');
+    const list   = $('#nextRigList');
+
+    if (state.nextRigId) {
+      const rig = findRig(state.nextRigId);
+      if (rig) {
+        banner.className = 'statusBanner';
+        banner.textContent = `次の抽選 → 「${rig.name}」を ${rig.table}卓 ${rig.number}番に`;
+      } else {
+        state.nextRigId = null;
+        banner.className = 'statusBanner';
+        banner.textContent = '通常抽選モード';
+      }
+    } else {
+      banner.className = 'statusBanner';
+      banner.textContent = '通常抽選モード';
+    }
+
+    const candidates = state.rigs.filter((r) => !r.used);
+    if (candidates.length === 0) {
+      list.innerHTML = '<div class="hostEmpty">未使用の仕込みがありません</div>';
+      return;
+    }
+
+    list.innerHTML = candidates.map((r) => {
+      const isNext = state.nextRigId === r.id;
+      return `
+        <div class="rigItem ${isNext ? 'next' : ''}">
+          <div class="info">
+            <div class="name">${escapeHtml(r.name)}</div>
+            <div class="seat">${r.table}卓 / ${r.number}番</div>
+          </div>
+          <div class="actions">
+            <button class="iconBtn ${isNext ? '' : 'primary'}" data-set-next="${r.id}" type="button">
+              ${isNext ? '選択中' : 'これにする'}
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    list.querySelectorAll('[data-set-next]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.nextRigId = btn.dataset.setNext;
+        save();
+        renderHostAll();
+      });
+    });
+  }
+
+  // ---------- HISTORY pane ----------
+  function renderHistoryPane() {
+    const list = $('#historyList');
+    if (state.history.length === 0) {
+      list.innerHTML = '<div class="hostEmpty">まだ抽選が行われていません</div>';
+      return;
+    }
+    list.innerHTML = state.history.map((h) => {
+      const label = `${h.table}卓 / ${h.number}番`;
+      return `
+        <div class="historyItem">
+          <div class="order">${h.order}</div>
+          <div class="seat">${label}</div>
+          ${h.wasRigged ? `<div class="mark">仕込み: ${escapeHtml(h.name || '')}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+
+  // ==========================================================
+  // Helpers
+  // ==========================================================
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    }[c]));
+  }
+
+  // ==========================================================
+  // SETUP (first time)
+  // ==========================================================
+  function openSetup() {
+    $('#setupPeople').value = 36;
+    $('#setupPass').value = '';
+    $('#setupPass2').value = '';
+    $('#setupErr').textContent = '';
+    show('setup');
+  }
+
+  function handleSetupSave() {
+    const err = $('#setupErr');
+    const n = parseInt($('#setupPeople').value, 10);
+    const p1 = $('#setupPass').value.trim();
+    const p2 = $('#setupPass2').value.trim();
+
+    if (!Number.isFinite(n) || n < 4 || n > 120) {
+      err.textContent = '人数は4〜120の範囲で入力してください';
+      return;
+    }
+    if (p1.length < 4) {
+      err.textContent = 'パスコードは4文字以上にしてください';
+      return;
+    }
+    if (p1 !== p2) {
+      err.textContent = 'パスコードが一致しません';
+      return;
+    }
+
+    state = initEmptyState();
+    state.config.initialized = true;
+    state.config.totalPeople = n;
+    state.config.passcode    = p1;
+    state.config.tables      = calcTables(n);
+    state.tableAvail         = { ...state.config.tables };
+    state.numbers            = buildNumbers(n);
+    save();
+
+    renderHome();
+    show('home');
+  }
+
+  // ==========================================================
+  // PASSCODE
+  // ==========================================================
+  function openPasscode() {
+    $('#passInput').value = '';
+    $('#passErr').textContent = '';
+    show('passcode');
+    setTimeout(() => $('#passInput').focus(), 100);
+  }
+
+  function handlePassOk() {
+    const err = $('#passErr');
+    const v = $('#passInput').value.trim();
+    if (v === state.config.passcode) {
+      openHost();
+    } else {
+      err.textContent = 'パスコードが違います';
+    }
+  }
+
+  // ==========================================================
+  // Host entry: long press 2s on top-right corner
+  // ==========================================================
+  function bindHostEntry() {
+    const el = $('#hostEntry');
+    let timer = null;
+    const LONG_MS = 2000;
+
+    const start = (e) => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        openPasscode();
+      }, LONG_MS);
+    };
+    const cancel = () => {
+      if (timer) { clearTimeout(timer); timer = null; }
+    };
+
+    el.addEventListener('touchstart', start, { passive: true });
+    el.addEventListener('touchend',   cancel);
+    el.addEventListener('touchcancel', cancel);
+    el.addEventListener('touchmove',  cancel);
+    el.addEventListener('mousedown',  start);
+    el.addEventListener('mouseup',    cancel);
+    el.addEventListener('mouseleave', cancel);
+  }
+
+  // ==========================================================
+  // Event bindings
+  // ==========================================================
+  function bindEvents() {
+    // Home
+    $('#startBtn').addEventListener('click', startDraw);
+
+    // Result
+    $('#nextBtn').addEventListener('click', () => {
+      if (state.config.ended || remainingCount() === 0) {
+        show('complete');
+      } else {
+        renderHome();
+        show('home');
+      }
+    });
+
+    // Host close
+    $('#hostCloseBtn').addEventListener('click', closeHost);
+
+    // Tabs
+    $$('#host .tab').forEach((tab) => {
+      tab.addEventListener('click', () => activateTab(tab.dataset.tab));
+    });
+
+    // Settings
+    $('#cfgApplyPeopleBtn').addEventListener('click', applyPeopleChange);
+    $('#cfgSavePassBtn').addEventListener('click', savePasscode);
+    $('#resetDrawsBtn').addEventListener('click', resetDraws);
+    $('#forceEndBtn').addEventListener('click', forceEnd);
+    $('#resetAllBtn').addEventListener('click', resetAll);
+
+    // Rigs
+    $('#rigTable').addEventListener('change', updateRigNumOptions);
+    $('#rigAddBtn').addEventListener('click', addRig);
+
+    // Next
+    $('#clearNextBtn').addEventListener('click', () => {
+      state.nextRigId = null;
+      save();
+      renderHostAll();
+    });
+
+    // Setup
+    $('#setupSaveBtn').addEventListener('click', handleSetupSave);
+
+    // Passcode
+    $('#passOkBtn').addEventListener('click', handlePassOk);
+    $('#passCancelBtn').addEventListener('click', () => {
+      renderHome();
+      show('home');
+    });
+    $('#passInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handlePassOk();
+    });
+
+    // Host entry (long press)
+    bindHostEntry();
+
+    // Prevent accidental double-tap zoom
+    document.addEventListener('gesturestart', (e) => e.preventDefault());
+  }
+
+  // ==========================================================
+  // Migration / integrity check
+  // ==========================================================
+  function sanitize(s) {
+    // 保険：壊れた状態を検出したら初期化
+    if (!s || !s.config) return null;
+    if (!s.tableAvail || !Array.isArray(s.numbers)) return null;
+    if (!Array.isArray(s.rigs) || !Array.isArray(s.history)) return null;
+    if (typeof s.config.ended !== 'boolean') s.config.ended = false;
+    return s;
+  }
+
+  // ==========================================================
+  // Boot
+  // ==========================================================
+  function boot() {
+    bindEvents();
+
+    const loaded = sanitize(load());
+    if (loaded && loaded.config && loaded.config.initialized) {
+      state = loaded;
+      renderHome();
+      show('home');
+    } else {
+      state = initEmptyState();
+      openSetup();
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', boot);
+
+  // ==========================================================
+  // Service Worker 登録 (PWA / オフライン対応)
+  // ==========================================================
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker
+        .register('sw.js')
+        .catch((err) => console.warn('SW register failed', err));
+    });
+  }
+})();
+</script>
+</body>
+</html>

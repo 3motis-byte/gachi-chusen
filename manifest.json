@@ -1,0 +1,26 @@
+{
+  "name": "ガチ抽選機",
+  "short_name": "ガチ抽選",
+  "description": "卓分け抽選ツール",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0a12",
+  "theme_color": "#0a0a12",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "host.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "host.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
