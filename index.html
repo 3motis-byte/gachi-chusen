@@ -711,6 +711,10 @@
       <input type="number" id="setupPeople" min="4" max="120" value="36" inputmode="numeric" />
     </div>
     <div class="formRow">
+      <label>卓数（1〜6）</label>
+      <input type="number" id="setupTableCount" min="1" max="6" value="4" inputmode="numeric" />
+    </div>
+    <div class="formRow">
       <label>主催者パスコード（4桁以上）</label>
       <input type="password" id="setupPass" inputmode="numeric" />
     </div>
@@ -766,6 +770,14 @@
         <button id="cfgApplyPeopleBtn" class="primaryBtn" type="button">人数を変更</button>
         <div class="errorText" id="cfgPeopleErr"></div>
 
+        <h3>卓数変更</h3>
+        <div class="formRow">
+          <label>卓数（1〜6）</label>
+          <input type="number" id="cfgTableCount" min="1" max="6" inputmode="numeric" />
+        </div>
+        <button id="cfgApplyTableCountBtn" class="primaryBtn" type="button">卓数を変更</button>
+        <div class="errorText" id="cfgTableCountErr"></div>
+
         <h3>パスコード変更</h3>
         <div class="formRow">
           <label>新しいパスコード</label>
@@ -791,12 +803,7 @@
           <div class="row2">
             <div>
               <label>卓</label>
-              <select id="rigTable">
-                <option value="A">A卓</option>
-                <option value="B">B卓</option>
-                <option value="C">C卓</option>
-                <option value="D">D卓</option>
-              </select>
+              <select id="rigTable"></select>
             </div>
             <div>
               <label>番号</label>
@@ -845,11 +852,22 @@
   // Constants
   // ==========================================================
   const STORAGE_KEY = 'takuwake-v2';
-  const TABLE_KEYS = ['A', 'B', 'C', 'D'];
+  const ALL_TABLE_KEYS = ['A', 'B', 'C', 'D', 'E', 'F'];
+  const MIN_TABLES = 1;
+  const MAX_TABLES = 6;
+  const DEFAULT_TABLE_COUNT = 4;
   const SLOT_TABLE_MS = 900;   // 卓リールの回転時間
   const SLOT_NUM_MS   = 1000;  // 番号リールの回転時間
   const SLOT_GAP_MS   = 150;   // 番号が止まった後の余韻
   const CELL_H        = 56;    // .cell の高さ (CSSと一致)
+
+  // 現在有効な卓キー配列を返す（config.tableCount に依存）
+  function getTableKeys() {
+    const count = (state && state.config && state.config.tableCount)
+      ? state.config.tableCount
+      : DEFAULT_TABLE_COUNT;
+    return ALL_TABLE_KEYS.slice(0, count);
+  }
 
   // ==========================================================
   // State
@@ -859,11 +877,12 @@
    *     initialized: boolean,
    *     totalPeople: number,
    *     passcode: string,
-   *     tables: {A:number,B:number,C:number,D:number},
+   *     tableCount: number,
+   *     tables: {[key:string]:number},
    *     started: boolean,
    *     ended: boolean
    *   },
-   *   tableAvail: {A:number,B:number,C:number,D:number},
+   *   tableAvail: {[key:string]:number},
    *   numbers: Array<{value:number,status:string,reservedFor:string|null}>,
    *   rigs: Array<{id:string,name:string,table:string,number:number,used:boolean}>,
    *   nextRigId: string|null,
@@ -895,15 +914,16 @@
            Math.floor(Math.random() * 1e9).toString(36);
   }
 
-  function calcTables(n) {
-    const base = Math.floor(n / 4);
-    const rem  = n % 4;
-    return {
-      A: base + (rem >= 1 ? 1 : 0),
-      B: base + (rem >= 2 ? 1 : 0),
-      C: base + (rem >= 3 ? 1 : 0),
-      D: base,
-    };
+  function calcTables(n, count) {
+    const c = count || DEFAULT_TABLE_COUNT;
+    const keys = ALL_TABLE_KEYS.slice(0, c);
+    const base = Math.floor(n / c);
+    const rem  = n % c;
+    const result = {};
+    keys.forEach((k, i) => {
+      result[k] = base + (i < rem ? 1 : 0);
+    });
+    return result;
   }
 
   function buildNumbers(n) {
@@ -927,7 +947,7 @@
   }
 
   function availableTableKeys() {
-    return TABLE_KEYS.filter((t) => state.tableAvail[t] > 0);
+    return getTableKeys().filter((t) => (state.tableAvail[t] || 0) > 0);
   }
 
   function canDrawNormal() {
@@ -976,16 +996,19 @@
   }
 
   function initEmptyState() {
+    const n = 36;
+    const tc = DEFAULT_TABLE_COUNT;
     return {
       config: {
         initialized: false,
-        totalPeople: 36,
+        totalPeople: n,
         passcode: '',
-        tables: calcTables(36),
+        tableCount: tc,
+        tables: calcTables(n, tc),
         started: false,
         ended: false,
       },
-      tableAvail: calcTables(36),
+      tableAvail: calcTables(n, tc),
       numbers: [],
       rigs: [],
       nextRigId: null,
@@ -1127,9 +1150,12 @@
       const tableStrip = $('#reelTableStrip');
       const numStrip   = $('#reelNumStrip');
 
-      // Table reel
-      const tableIdx = TABLE_KEYS.indexOf(table);
-      const tableFinal = buildReel(tableStrip, TABLE_KEYS, tableIdx, 8);
+      // Table reel - 現在の卓数に応じて回す
+      const tableKeys = getTableKeys();
+      const tableIdx = tableKeys.indexOf(table);
+      // 卓数が少ない時は繰り返し回数を増やして回転量を稼ぐ
+      const tableRepeat = Math.max(4, Math.ceil(24 / tableKeys.length) + 2);
+      const tableFinal = buildReel(tableStrip, tableKeys, tableIdx, tableRepeat);
 
       // Number reel: 1 〜 totalPeople（通し番号）
       const N = state.config.totalPeople;
@@ -1196,26 +1222,35 @@
     const drawn = state.history.length;
     const unusedRigs = state.rigs.filter((r) => !r.used).length;
     const availNums = availableNumbers().length;
+    const keys = getTableKeys();
 
-    const html = `
-      <div class="row"><span class="k">参加人数</span><span>${state.config.totalPeople} 人</span></div>
-      <div class="row"><span class="k">A卓</span><span>${t.A} 人</span></div>
-      <div class="row"><span class="k">B卓</span><span>${t.B} 人</span></div>
-      <div class="row"><span class="k">C卓</span><span>${t.C} 人</span></div>
-      <div class="row"><span class="k">D卓</span><span>${t.D} 人</span></div>
-      <div class="row"><span class="k">番号</span><span>1 〜 ${state.config.totalPeople}</span></div>
-      <div class="row"><span class="k">抽選済み</span><span>${drawn} 人</span></div>
-      <div class="row"><span class="k">残り番号</span><span>${availNums} 個</span></div>
-      <div class="row"><span class="k">仕込み予約</span><span>${unusedRigs} 件</span></div>
-    `;
-    $('#tableInfoBox').innerHTML = html;
+    let rows = '';
+    rows += `<div class="row"><span class="k">参加人数</span><span>${state.config.totalPeople} 人</span></div>`;
+    rows += `<div class="row"><span class="k">卓数</span><span>${state.config.tableCount} 卓</span></div>`;
+    for (const k of keys) {
+      rows += `<div class="row"><span class="k">${k}卓</span><span>${t[k] || 0} 人</span></div>`;
+    }
+    rows += `<div class="row"><span class="k">番号</span><span>1 〜 ${state.config.totalPeople}</span></div>`;
+    rows += `<div class="row"><span class="k">抽選済み</span><span>${drawn} 人</span></div>`;
+    rows += `<div class="row"><span class="k">残り番号</span><span>${availNums} 個</span></div>`;
+    rows += `<div class="row"><span class="k">仕込み予約</span><span>${unusedRigs} 件</span></div>`;
+    $('#tableInfoBox').innerHTML = rows;
 
+    // 人数変更
     $('#cfgPeople').value = state.config.totalPeople;
     $('#cfgPeopleErr').textContent = state.config.started
       ? '※ 抽選開始後は人数変更できません（全リセットが必要）'
       : '';
     $('#cfgPeople').disabled = state.config.started;
     $('#cfgApplyPeopleBtn').disabled = state.config.started;
+
+    // 卓数変更
+    $('#cfgTableCount').value = state.config.tableCount;
+    $('#cfgTableCountErr').textContent = state.config.started
+      ? '※ 抽選開始後は卓数変更できません（全リセットが必要）'
+      : '';
+    $('#cfgTableCount').disabled = state.config.started;
+    $('#cfgApplyTableCountBtn').disabled = state.config.started;
 
     $('#cfgPass').value = '';
     $('#cfgPassErr').textContent = '';
@@ -1232,19 +1267,28 @@
       err.textContent = '4〜120の範囲で入力してください';
       return;
     }
-    const newTables = calcTables(n);
+    const tc = state.config.tableCount;
+    if (n < tc) {
+      err.textContent = `人数は卓数(${tc})以上にしてください`;
+      return;
+    }
+    const keys = getTableKeys();
+    const newTables = calcTables(n, tc);
     // 既存の仕込みが範囲外にならないかチェック
-    // ・番号が n を超えていないか
-    // ・各卓の仕込み数が新しい卓定員を超えていないか
-    const rigPerTable = { A: 0, B: 0, C: 0, D: 0 };
+    const rigPerTable = {};
+    keys.forEach((k) => { rigPerTable[k] = 0; });
     for (const r of state.rigs) {
       if (r.number > n) {
         err.textContent = `番号 ${r.number} の仕込みが範囲外になります。先にその仕込みを削除してください`;
         return;
       }
+      if (!keys.includes(r.table)) {
+        err.textContent = `仕込み "${r.name}" の卓(${r.table})が存在しません。先にその仕込みを削除してください`;
+        return;
+      }
       rigPerTable[r.table]++;
     }
-    for (const t of TABLE_KEYS) {
+    for (const t of keys) {
       if (rigPerTable[t] > newTables[t]) {
         err.textContent = `${t}卓の仕込み数(${rigPerTable[t]})が新しい定員(${newTables[t]})を超えます`;
         return;
@@ -1264,7 +1308,56 @@
     }
     // 卓カウンタを再計算
     state.tableAvail = {};
-    for (const t of TABLE_KEYS) {
+    for (const t of keys) {
+      state.tableAvail[t] = newTables[t] - rigPerTable[t];
+    }
+    save();
+    err.textContent = '';
+    renderHostAll();
+  }
+
+  function applyTableCountChange() {
+    const err = $('#cfgTableCountErr');
+    if (state.config.started) {
+      err.textContent = '抽選開始後は変更できません';
+      return;
+    }
+    const tc = parseInt($('#cfgTableCount').value, 10);
+    if (!Number.isFinite(tc) || tc < MIN_TABLES || tc > MAX_TABLES) {
+      err.textContent = `${MIN_TABLES}〜${MAX_TABLES}の範囲で入力してください`;
+      return;
+    }
+    const n = state.config.totalPeople;
+    if (n < tc) {
+      err.textContent = `人数(${n})より多い卓数は指定できません`;
+      return;
+    }
+    const newKeys = ALL_TABLE_KEYS.slice(0, tc);
+    const newTables = calcTables(n, tc);
+    // 既存仕込みの整合チェック
+    // ・卓が新範囲に存在するか（減らす場合）
+    // ・各卓の仕込み数が新定員を超えないか（再配分で減る場合）
+    const rigPerTable = {};
+    newKeys.forEach((k) => { rigPerTable[k] = 0; });
+    for (const r of state.rigs) {
+      if (!newKeys.includes(r.table)) {
+        err.textContent = `${r.table}卓の仕込み "${r.name}" が範囲外になります。先に削除してください`;
+        return;
+      }
+      rigPerTable[r.table]++;
+    }
+    for (const t of newKeys) {
+      if (rigPerTable[t] > newTables[t]) {
+        err.textContent = `${t}卓の仕込み数(${rigPerTable[t]})が新しい定員(${newTables[t]})を超えます`;
+        return;
+      }
+    }
+    // 適用
+    state.config.tableCount = tc;
+    state.config.tables = newTables;
+    // tableAvail を再計算
+    state.tableAvail = {};
+    for (const t of newKeys) {
       state.tableAvail[t] = newTables[t] - rigPerTable[t];
     }
     save();
@@ -1288,13 +1381,15 @@
 
   function resetDraws() {
     if (!confirm('抽選結果のみリセットします。設定と仕込みは残ります。よろしいですか？')) return;
+    const keys = getTableKeys();
     // 番号プールを作り直し
     state.numbers = buildNumbers(state.config.totalPeople);
     // 仕込みを再適用
-    const rigPerTable = { A: 0, B: 0, C: 0, D: 0 };
+    const rigPerTable = {};
+    keys.forEach((k) => { rigPerTable[k] = 0; });
     state.rigs.forEach((r) => {
       r.used = false;
-      rigPerTable[r.table]++;
+      if (rigPerTable.hasOwnProperty(r.table)) rigPerTable[r.table]++;
       const num = findNumber(r.number);
       if (num) {
         num.status = 'reserved';
@@ -1303,8 +1398,8 @@
     });
     // 卓カウンタ再計算
     state.tableAvail = {};
-    for (const t of TABLE_KEYS) {
-      state.tableAvail[t] = state.config.tables[t] - rigPerTable[t];
+    for (const t of keys) {
+      state.tableAvail[t] = (state.config.tables[t] || 0) - rigPerTable[t];
     }
     state.history = [];
     state.nextRigId = null;
@@ -1332,6 +1427,7 @@
 
   // ---------- RIGS pane ----------
   function renderRigsPane() {
+    updateRigTableOptions();
     updateRigNumOptions();
     const list = $('#rigList');
     if (state.rigs.length === 0) {
@@ -1364,6 +1460,29 @@
         deleteRig(btn.dataset.delRig);
       });
     });
+  }
+
+  function updateRigTableOptions() {
+    const sel = $('#rigTable');
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = '';
+    const keys = getTableKeys();
+    for (const k of keys) {
+      const opt = document.createElement('option');
+      opt.value = k;
+      const avail = state.tableAvail[k] || 0;
+      if (avail <= 0) {
+        opt.textContent = `${k}卓（満員）`;
+        opt.disabled = true;
+      } else {
+        opt.textContent = `${k}卓`;
+      }
+      sel.appendChild(opt);
+    }
+    if (prev && keys.includes(prev)) {
+      sel.value = prev;
+    }
   }
 
   function updateRigNumOptions() {
@@ -1400,7 +1519,7 @@
       err.textContent = '名前を入力してください';
       return;
     }
-    if (!TABLE_KEYS.includes(table)) {
+    if (!getTableKeys().includes(table)) {
       err.textContent = '卓を選んでください';
       return;
     }
@@ -1545,6 +1664,7 @@
   // ==========================================================
   function openSetup() {
     $('#setupPeople').value = 36;
+    $('#setupTableCount').value = DEFAULT_TABLE_COUNT;
     $('#setupPass').value = '';
     $('#setupPass2').value = '';
     $('#setupErr').textContent = '';
@@ -1554,11 +1674,20 @@
   function handleSetupSave() {
     const err = $('#setupErr');
     const n = parseInt($('#setupPeople').value, 10);
+    const tc = parseInt($('#setupTableCount').value, 10);
     const p1 = $('#setupPass').value.trim();
     const p2 = $('#setupPass2').value.trim();
 
     if (!Number.isFinite(n) || n < 4 || n > 120) {
       err.textContent = '人数は4〜120の範囲で入力してください';
+      return;
+    }
+    if (!Number.isFinite(tc) || tc < MIN_TABLES || tc > MAX_TABLES) {
+      err.textContent = `卓数は${MIN_TABLES}〜${MAX_TABLES}の範囲で入力してください`;
+      return;
+    }
+    if (n < tc) {
+      err.textContent = '人数が卓数より少なくなっています';
       return;
     }
     if (p1.length < 4) {
@@ -1573,8 +1702,9 @@
     state = initEmptyState();
     state.config.initialized = true;
     state.config.totalPeople = n;
+    state.config.tableCount  = tc;
     state.config.passcode    = p1;
-    state.config.tables      = calcTables(n);
+    state.config.tables      = calcTables(n, tc);
     state.tableAvail         = { ...state.config.tables };
     state.numbers            = buildNumbers(n);
     save();
@@ -1658,6 +1788,7 @@
 
     // Settings
     $('#cfgApplyPeopleBtn').addEventListener('click', applyPeopleChange);
+    $('#cfgApplyTableCountBtn').addEventListener('click', applyTableCountChange);
     $('#cfgSavePassBtn').addEventListener('click', savePasscode);
     $('#resetDrawsBtn').addEventListener('click', resetDraws);
     $('#forceEndBtn').addEventListener('click', forceEnd);
@@ -1703,6 +1834,13 @@
     if (!s.tableAvail || !Array.isArray(s.numbers)) return null;
     if (!Array.isArray(s.rigs) || !Array.isArray(s.history)) return null;
     if (typeof s.config.ended !== 'boolean') s.config.ended = false;
+    // tableCount の後方互換：欠損時は config.tables のキー数から推測
+    if (typeof s.config.tableCount !== 'number') {
+      const keyCount = s.config.tables ? Object.keys(s.config.tables).length : 0;
+      s.config.tableCount = (keyCount >= MIN_TABLES && keyCount <= MAX_TABLES)
+        ? keyCount
+        : DEFAULT_TABLE_COUNT;
+    }
     return s;
   }
 

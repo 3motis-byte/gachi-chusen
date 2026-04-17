@@ -2,7 +2,7 @@
  * オフライン動作のためにアセットをキャッシュします。
  * 更新する際は CACHE_NAME のバージョンを上げてください。
  */
-const CACHE_NAME = 'gachi-chusen-v1';
+const CACHE_NAME = 'gachi-chusen-v2';
 const ASSETS = [
   './',
   './index.html',
