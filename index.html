@@ -625,6 +625,72 @@
 
   /* No-select for headings */
   h1, h2, h3, .num, .table, .big { -webkit-user-select: none; user-select: none; }
+
+  /* =========================================================
+     Mode: table_only (番号関連を非表示)
+     ========================================================= */
+  body.mode-table-only .reel.num,
+  body.mode-table-only #result .num,
+  body.mode-table-only #result .numSuf,
+  body.mode-table-only .rigNumWrap,
+  body.mode-table-only .historyNum,
+  body.mode-table-only .numberOnlyRow {
+    display: none !important;
+  }
+  /* 仕込みフォームの行を1列に */
+  body.mode-table-only .rigForm .row2 {
+    grid-template-columns: 1fr;
+  }
+
+  /* =========================================================
+     Quick access mode: 主催者アイコンを少し目立たせる
+     （主催者本人だけが気づくレベルの差）
+     ========================================================= */
+  body.quick-access #hostEntry {
+    opacity: 0.85;
+  }
+
+  /* トグルスイッチ */
+  .switchRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #0f1a2a;
+    border: 1px solid #1a2a40;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-top: 10px;
+  }
+  .switchRow .label {
+    flex: 1;
+    color: #c0d0e0;
+    font-size: 14px;
+  }
+  .switchRow .desc {
+    color: #6a7e94;
+    font-size: 11px;
+    margin-top: 4px;
+  }
+  .switch {
+    position: relative;
+    width: 52px; height: 30px;
+    background: #1a2a40;
+    border-radius: 15px;
+    cursor: pointer;
+    transition: background .2s ease;
+    flex-shrink: 0;
+  }
+  .switch.on { background: #ffb84d; }
+  .switch::after {
+    content: "";
+    position: absolute;
+    left: 3px; top: 3px;
+    width: 24px; height: 24px;
+    background: #f2f2f7;
+    border-radius: 50%;
+    transition: transform .2s ease;
+  }
+  .switch.on::after { transform: translateX(22px); }
 </style>
 </head>
 <body>
@@ -715,6 +781,13 @@
       <input type="number" id="setupTableCount" min="1" max="6" value="4" inputmode="numeric" />
     </div>
     <div class="formRow">
+      <label>抽選モード</label>
+      <select id="setupMode">
+        <option value="with_number">卓 + 番号（通し番号）</option>
+        <option value="table_only">卓のみ</option>
+      </select>
+    </div>
+    <div class="formRow">
       <label>主催者パスコード（4桁以上）</label>
       <input type="password" id="setupPass" inputmode="numeric" />
     </div>
@@ -778,6 +851,26 @@
         <button id="cfgApplyTableCountBtn" class="primaryBtn" type="button">卓数を変更</button>
         <div class="errorText" id="cfgTableCountErr"></div>
 
+        <h3>抽選モード</h3>
+        <div class="formRow">
+          <label>モード</label>
+          <select id="cfgMode">
+            <option value="with_number">卓 + 番号（通し番号）</option>
+            <option value="table_only">卓のみ</option>
+          </select>
+        </div>
+        <button id="cfgApplyModeBtn" class="primaryBtn" type="button">モードを変更</button>
+        <div class="errorText" id="cfgModeErr"></div>
+
+        <h3>クイックアクセス</h3>
+        <div class="switchRow">
+          <div>
+            <div class="label">タップで主催者モードを開く</div>
+            <div class="desc">ON にすると、画像をタップするだけで主催者モードを開けます（パスコード不要）。OFFに戻すまで持続します。</div>
+          </div>
+          <div id="cfgQuickAccessSwitch" class="switch" role="switch" aria-checked="false"></div>
+        </div>
+
         <h3>パスコード変更</h3>
         <div class="formRow">
           <label>新しいパスコード</label>
@@ -805,7 +898,7 @@
               <label>卓</label>
               <select id="rigTable"></select>
             </div>
-            <div>
+            <div class="rigNumWrap">
               <label>番号</label>
               <select id="rigNum"></select>
             </div>
@@ -869,6 +962,19 @@
     return ALL_TABLE_KEYS.slice(0, count);
   }
 
+  function isTableOnly() {
+    return state && state.config && state.config.mode === 'table_only';
+  }
+
+  // モード・クイックアクセスのフラグを body class に反映
+  function applyBodyClasses() {
+    document.body.classList.toggle('mode-table-only', isTableOnly());
+    document.body.classList.toggle(
+      'quick-access',
+      !!(state && state.config && state.config.quickAccess)
+    );
+  }
+
   // ==========================================================
   // State
   // ==========================================================
@@ -879,6 +985,8 @@
    *     passcode: string,
    *     tableCount: number,
    *     tables: {[key:string]:number},
+   *     mode: string,
+   *     quickAccess: boolean,
    *     started: boolean,
    *     ended: boolean
    *   },
@@ -1005,6 +1113,8 @@
         passcode: '',
         tableCount: tc,
         tables: calcTables(n, tc),
+        mode: 'with_number',  // 'with_number' | 'table_only'
+        quickAccess: false,    // ON時はタップで主催者モード（パスコード不要）
         started: false,
         ended: false,
       },
@@ -1149,39 +1259,44 @@
     return new Promise((resolve) => {
       const tableStrip = $('#reelTableStrip');
       const numStrip   = $('#reelNumStrip');
+      const tableOnly  = isTableOnly();
 
       // Table reel - 現在の卓数に応じて回す
       const tableKeys = getTableKeys();
       const tableIdx = tableKeys.indexOf(table);
-      // 卓数が少ない時は繰り返し回数を増やして回転量を稼ぐ
       const tableRepeat = Math.max(4, Math.ceil(24 / tableKeys.length) + 2);
       const tableFinal = buildReel(tableStrip, tableKeys, tableIdx, tableRepeat);
 
       // Number reel: 1 〜 totalPeople（通し番号）
+      // table_only モードでは表示されないが念のため停止位置を計算
       const N = state.config.totalPeople;
       const numItems = [];
       for (let i = 1; i <= N; i++) numItems.push(i);
       const numIdx = numItems.indexOf(number);
-      // 候補が少ない時は繰り返し回数を増やして回転量を稼ぐ
       const numRepeat = Math.max(3, Math.ceil(30 / numItems.length) + 2);
-      const numFinal = buildReel(numStrip, numItems, numIdx, numRepeat);
+      const numFinal = (number != null && numIdx >= 0)
+        ? buildReel(numStrip, numItems, numIdx, numRepeat)
+        : 0;
 
       // Force reflow so the initial position applies
       void tableStrip.offsetHeight;
       void numStrip.offsetHeight;
 
-      // Start both with different timings
+      // Start with table reel
       tableStrip.style.transition = `transform ${SLOT_TABLE_MS}ms cubic-bezier(0.15, 0.6, 0.25, 1)`;
       tableStrip.style.transform  = `translateY(${tableFinal}px)`;
 
-      // Number reel starts slightly later and ends later
-      setTimeout(() => {
-        numStrip.style.transition = `transform ${SLOT_NUM_MS}ms cubic-bezier(0.15, 0.6, 0.25, 1)`;
-        numStrip.style.transform  = `translateY(${numFinal}px)`;
-      }, 250);
-
-      // Resolve after number reel stops + gap
-      setTimeout(resolve, 250 + SLOT_NUM_MS + SLOT_GAP_MS);
+      if (tableOnly) {
+        // 卓のみモード: 卓リールが止まったら終了
+        setTimeout(resolve, SLOT_TABLE_MS + SLOT_GAP_MS);
+      } else {
+        // 卓 + 番号モード: 番号リールも回す
+        setTimeout(() => {
+          numStrip.style.transition = `transform ${SLOT_NUM_MS}ms cubic-bezier(0.15, 0.6, 0.25, 1)`;
+          numStrip.style.transform  = `translateY(${numFinal}px)`;
+        }, 250);
+        setTimeout(resolve, 250 + SLOT_NUM_MS + SLOT_GAP_MS);
+      }
     });
   }
 
@@ -1223,16 +1338,22 @@
     const unusedRigs = state.rigs.filter((r) => !r.used).length;
     const availNums = availableNumbers().length;
     const keys = getTableKeys();
+    const tableOnly = isTableOnly();
 
     let rows = '';
     rows += `<div class="row"><span class="k">参加人数</span><span>${state.config.totalPeople} 人</span></div>`;
     rows += `<div class="row"><span class="k">卓数</span><span>${state.config.tableCount} 卓</span></div>`;
+    rows += `<div class="row"><span class="k">モード</span><span>${tableOnly ? '卓のみ' : '卓 + 番号'}</span></div>`;
     for (const k of keys) {
       rows += `<div class="row"><span class="k">${k}卓</span><span>${t[k] || 0} 人</span></div>`;
     }
-    rows += `<div class="row"><span class="k">番号</span><span>1 〜 ${state.config.totalPeople}</span></div>`;
+    if (!tableOnly) {
+      rows += `<div class="row"><span class="k">番号</span><span>1 〜 ${state.config.totalPeople}</span></div>`;
+    }
     rows += `<div class="row"><span class="k">抽選済み</span><span>${drawn} 人</span></div>`;
-    rows += `<div class="row"><span class="k">残り番号</span><span>${availNums} 個</span></div>`;
+    if (!tableOnly) {
+      rows += `<div class="row"><span class="k">残り番号</span><span>${availNums} 個</span></div>`;
+    }
     rows += `<div class="row"><span class="k">仕込み予約</span><span>${unusedRigs} 件</span></div>`;
     $('#tableInfoBox').innerHTML = rows;
 
@@ -1252,8 +1373,51 @@
     $('#cfgTableCount').disabled = state.config.started;
     $('#cfgApplyTableCountBtn').disabled = state.config.started;
 
+    // モード変更
+    $('#cfgMode').value = state.config.mode;
+    $('#cfgModeErr').textContent = state.config.started
+      ? '※ 抽選開始後はモード変更できません（全リセットが必要）'
+      : '';
+    $('#cfgMode').disabled = state.config.started;
+    $('#cfgApplyModeBtn').disabled = state.config.started;
+
+    // クイックアクセス
+    const sw = $('#cfgQuickAccessSwitch');
+    if (state.config.quickAccess) {
+      sw.classList.add('on');
+      sw.setAttribute('aria-checked', 'true');
+    } else {
+      sw.classList.remove('on');
+      sw.setAttribute('aria-checked', 'false');
+    }
+
     $('#cfgPass').value = '';
     $('#cfgPassErr').textContent = '';
+  }
+
+  function applyModeChange() {
+    const err = $('#cfgModeErr');
+    if (state.config.started) {
+      err.textContent = '抽選開始後は変更できません';
+      return;
+    }
+    const mode = $('#cfgMode').value;
+    if (mode !== 'with_number' && mode !== 'table_only') {
+      err.textContent = 'モードが不正です';
+      return;
+    }
+    state.config.mode = mode;
+    save();
+    applyBodyClasses();
+    err.textContent = '';
+    renderHostAll();
+  }
+
+  function toggleQuickAccess() {
+    state.config.quickAccess = !state.config.quickAccess;
+    save();
+    applyBodyClasses();
+    renderSettingsPane();
   }
 
   function applyPeopleChange() {
@@ -1434,6 +1598,7 @@
       list.innerHTML = '<div class="hostEmpty">仕込みはまだありません</div>';
       return;
     }
+    const tableOnly = isTableOnly();
     list.innerHTML = state.rigs.map((r) => {
       const isNext = state.nextRigId === r.id;
       const usedClass = r.used ? 'drawn' : '';
@@ -1441,11 +1606,14 @@
       const tag = r.used
         ? '<span class="tag">消化済</span>'
         : (isNext ? '<span class="tag">次に発動</span>' : '');
+      const seatLabel = tableOnly
+        ? `${r.table}卓`
+        : `${r.table}卓 / ${r.number}番`;
       return `
         <div class="rigItem ${usedClass} ${nextClass}">
           <div class="info">
             <div class="name">${escapeHtml(r.name)}</div>
-            <div class="seat">${r.table}卓 / ${r.number}番 ${tag}</div>
+            <div class="seat">${seatLabel} ${tag}</div>
           </div>
           <div class="actions">
             <button class="iconBtn danger" data-del-rig="${r.id}" type="button" ${r.used ? 'disabled' : ''}>削除</button>
@@ -1513,7 +1681,7 @@
     const err = $('#rigErr');
     const name = $('#rigName').value.trim();
     const table = $('#rigTable').value;
-    const num = parseInt($('#rigNum').value, 10);
+    const tableOnly = isTableOnly();
 
     if (!name) {
       err.textContent = '名前を入力してください';
@@ -1527,24 +1695,39 @@
       err.textContent = `${table}卓は満員です（他の卓にするか、先に抽選結果をリセット）`;
       return;
     }
-    const numObj = findNumber(num);
-    if (!numObj) {
-      err.textContent = 'その番号は存在しません';
-      return;
+
+    // 番号の決定：with_number モードはユーザー指定、table_only は自動採番
+    let numObj;
+    if (tableOnly) {
+      const pool = availableNumbers();
+      if (pool.length === 0) {
+        err.textContent = '空き番号がありません';
+        return;
+      }
+      const idx = secureRandomInt(pool.length);
+      numObj = pool[idx];
+    } else {
+      const num = parseInt($('#rigNum').value, 10);
+      numObj = findNumber(num);
+      if (!numObj) {
+        err.textContent = 'その番号は存在しません';
+        return;
+      }
+      if (numObj.status === 'drawn') {
+        err.textContent = 'その番号は既に抽選済みです';
+        return;
+      }
+      if (numObj.status === 'reserved') {
+        err.textContent = 'その番号は既に他の仕込みで使われています';
+        return;
+      }
     }
-    if (numObj.status === 'drawn') {
-      err.textContent = 'その番号は既に抽選済みです';
-      return;
-    }
-    if (numObj.status === 'reserved') {
-      err.textContent = 'その番号は既に他の仕込みで使われています';
-      return;
-    }
+
     const rig = {
       id: uuid(),
       name: name,
       table: table,
-      number: num,
+      number: numObj.value,
       used: false,
     };
     state.rigs.push(rig);
@@ -1583,8 +1766,12 @@
     if (state.nextRigId) {
       const rig = findRig(state.nextRigId);
       if (rig) {
+        const tableOnly = isTableOnly();
+        const seatLabel = tableOnly
+          ? `${rig.table}卓`
+          : `${rig.table}卓 ${rig.number}番`;
         banner.className = 'statusBanner';
-        banner.textContent = `次の抽選 → 「${rig.name}」を ${rig.table}卓 ${rig.number}番に`;
+        banner.textContent = `次の抽選 → 「${rig.name}」を ${seatLabel}に`;
       } else {
         state.nextRigId = null;
         banner.className = 'statusBanner';
@@ -1601,13 +1788,15 @@
       return;
     }
 
+    const tableOnly2 = isTableOnly();
     list.innerHTML = candidates.map((r) => {
       const isNext = state.nextRigId === r.id;
+      const seatLabel = tableOnly2 ? `${r.table}卓` : `${r.table}卓 / ${r.number}番`;
       return `
         <div class="rigItem ${isNext ? 'next' : ''}">
           <div class="info">
             <div class="name">${escapeHtml(r.name)}</div>
-            <div class="seat">${r.table}卓 / ${r.number}番</div>
+            <div class="seat">${seatLabel}</div>
           </div>
           <div class="actions">
             <button class="iconBtn ${isNext ? '' : 'primary'}" data-set-next="${r.id}" type="button">
@@ -1634,8 +1823,9 @@
       list.innerHTML = '<div class="hostEmpty">まだ抽選が行われていません</div>';
       return;
     }
+    const tableOnly = isTableOnly();
     list.innerHTML = state.history.map((h) => {
-      const label = `${h.table}卓 / ${h.number}番`;
+      const label = tableOnly ? `${h.table}卓` : `${h.table}卓 / ${h.number}番`;
       return `
         <div class="historyItem">
           <div class="order">${h.order}</div>
@@ -1665,6 +1855,7 @@
   function openSetup() {
     $('#setupPeople').value = 36;
     $('#setupTableCount').value = DEFAULT_TABLE_COUNT;
+    $('#setupMode').value = 'with_number';
     $('#setupPass').value = '';
     $('#setupPass2').value = '';
     $('#setupErr').textContent = '';
@@ -1675,6 +1866,7 @@
     const err = $('#setupErr');
     const n = parseInt($('#setupPeople').value, 10);
     const tc = parseInt($('#setupTableCount').value, 10);
+    const mode = $('#setupMode').value;
     const p1 = $('#setupPass').value.trim();
     const p2 = $('#setupPass2').value.trim();
 
@@ -1690,6 +1882,10 @@
       err.textContent = '人数が卓数より少なくなっています';
       return;
     }
+    if (mode !== 'with_number' && mode !== 'table_only') {
+      err.textContent = 'モードを選んでください';
+      return;
+    }
     if (p1.length < 4) {
       err.textContent = 'パスコードは4文字以上にしてください';
       return;
@@ -1703,12 +1899,14 @@
     state.config.initialized = true;
     state.config.totalPeople = n;
     state.config.tableCount  = tc;
+    state.config.mode        = mode;
     state.config.passcode    = p1;
     state.config.tables      = calcTables(n, tc);
     state.tableAvail         = { ...state.config.tables };
     state.numbers            = buildNumbers(n);
     save();
 
+    applyBodyClasses();
     renderHome();
     show('home');
   }
@@ -1734,30 +1932,50 @@
   }
 
   // ==========================================================
-  // Host entry: long press 2s on top-right corner
+  // Host entry:
+  //   - quickAccess ON: シングルタップで主催者モードへ
+  //   - quickAccess OFF: 長押し2秒 → パスコード画面
   // ==========================================================
   function bindHostEntry() {
     const el = $('#hostEntry');
     let timer = null;
+    let pressed = false;
+    let opened = false; // ロングプレスで開いた直後の click を無視するフラグ
     const LONG_MS = 2000;
 
     const start = (e) => {
+      pressed = true;
+      opened = false;
+      // クイックアクセスON時はタップ離した時点で発火させる（後述）
+      if (state && state.config && state.config.quickAccess) {
+        return;
+      }
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
         timer = null;
+        opened = true;
         openPasscode();
       }, LONG_MS);
     };
     const cancel = () => {
+      pressed = false;
       if (timer) { clearTimeout(timer); timer = null; }
     };
 
+    // クイックアクセス時の即時オープン（tap = touchend / click）
+    const tapOpen = (e) => {
+      if (!(state && state.config && state.config.quickAccess)) return;
+      if (opened) return;
+      e.preventDefault && e.preventDefault();
+      openHost();
+    };
+
     el.addEventListener('touchstart', start, { passive: true });
-    el.addEventListener('touchend',   cancel);
+    el.addEventListener('touchend',   (e) => { tapOpen(e); cancel(); });
     el.addEventListener('touchcancel', cancel);
     el.addEventListener('touchmove',  cancel);
     el.addEventListener('mousedown',  start);
-    el.addEventListener('mouseup',    cancel);
+    el.addEventListener('mouseup',    (e) => { tapOpen(e); cancel(); });
     el.addEventListener('mouseleave', cancel);
   }
 
@@ -1789,6 +2007,8 @@
     // Settings
     $('#cfgApplyPeopleBtn').addEventListener('click', applyPeopleChange);
     $('#cfgApplyTableCountBtn').addEventListener('click', applyTableCountChange);
+    $('#cfgApplyModeBtn').addEventListener('click', applyModeChange);
+    $('#cfgQuickAccessSwitch').addEventListener('click', toggleQuickAccess);
     $('#cfgSavePassBtn').addEventListener('click', savePasscode);
     $('#resetDrawsBtn').addEventListener('click', resetDraws);
     $('#forceEndBtn').addEventListener('click', forceEnd);
@@ -1841,6 +2061,14 @@
         ? keyCount
         : DEFAULT_TABLE_COUNT;
     }
+    // mode の後方互換：欠損時は with_number
+    if (s.config.mode !== 'with_number' && s.config.mode !== 'table_only') {
+      s.config.mode = 'with_number';
+    }
+    // quickAccess の後方互換：欠損時は false
+    if (typeof s.config.quickAccess !== 'boolean') {
+      s.config.quickAccess = false;
+    }
     return s;
   }
 
@@ -1853,6 +2081,7 @@
     const loaded = sanitize(load());
     if (loaded && loaded.config && loaded.config.initialized) {
       state = loaded;
+      applyBodyClasses();
       renderHome();
       show('home');
     } else {
